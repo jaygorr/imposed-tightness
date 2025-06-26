@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Imposed Tightness Survey - Qualtrics Version</title>
+  <!-- jsPsych core and plugins from CDN -->
+  <script src="https://unpkg.com/jspsych@7.3.4"></script>
+  <script src="https://unpkg.com/@jspsych/plugin-preload@1.1.2"></script>
+  <script src="https://unpkg.com/@jspsych/plugin-html-keyboard-response@1.1.2"></script>
+  <script src="https://unpkg.com/@jspsych/plugin-html-button-response@1.1.2"></script>
+  <script src="https://unpkg.com/@jspsych/plugin-survey-likert@1.1.2"></script>
+  <script src="https://unpkg.com/@jspsych/plugin-survey-multi-choice@1.1.2"></script>
+  <script src="https://unpkg.com/@jspsych/plugin-survey-text@1.1.2"></script>
+  <script src="https://unpkg.com/@jspsych/plugin-instructions@1.1.2"></script>
+  <link href="https://unpkg.com/jspsych@7.3.4/css/jspsych.css" rel="stylesheet">
+  <style>
+    body { font-family: Arial, sans-serif; }
+    #jspsych-target { margin: 20px auto; max-width: 800px; }
+  </style>
+</head>
+<body>
+  <div id="jspsych-target"></div>
+</body>
+<script>
+// ============== External Hosting Communication Setup ==============
+function sendDataToParent(data, fieldName) {
+  // Send data to parent window (Qualtrics)
+  if (window.parent && window.parent !== window) {
+    window.parent.postMessage({
+      type: 'jspsych_data',
+      field: fieldName,
+      data: data
+    }, '*');
+}
+
+function completeExperiment() {
+  // Signal completion to parent window
+  if (window.parent && window.parent !== window) {
+    window.parent.postMessage({
+      type: 'jspsych_complete'
+    }, '*');
+  }
+}
+
+}
+
+// ============== Experiment Setup ==============
+const jsPsych = initJsPsych({
+  display_element: 'jspsych-target',
+  on_finish: function() {
+    // Save all data to parent
+    const allData = jsPsych.data.get().json();
+    sendDataToParent(allData, 'jspsych_all_data');
+    
+    // Save specific data categories
+    const scenarioData = jsPsych.data.filter({task: 'scenario'}).json();
+    sendDataToParent(scenarioData, 'scenario_data');
+    
+    const tightLooseData = jsPsych.data.filter({task: 'tight_loose'}).json();
+    sendDataToParent(tightLooseData, 'tight_loose_data');
+    
+    const screeningData = jsPsych.data.filter({task: 'screening'}).json();
+    sendDataToParent(screeningData, 'screening_data');
+    
+    const demographicsData = jsPsych.data.filter({task: 'demographics'}).json();
+    sendDataToParent(demographicsData, 'demographics_data');
+    
+    // Display completion message and advance Qualtrics
+    document.getElementById('jspsych-target').innerHTML = 
+      '<h2>Task Complete!</h2><p>Your responses have been saved. The survey will continue automatically...</p>';
+    
+    // Complete the experiment
+    setTimeout(completeExperiment, 2000);
+  }
+});
+
+const timeline = [];
+
+// ============== 1. CAPTCHA ==============
+timeline.push({
+  type: jsPsychHtmlButtonResponse,
+  stimulus: '<p>Before you begin, please answer: What is 3 + 4?</p>',
+  choices: ['6', '7', '8', '9'],
+  button_html: '<button class="jspsych-btn">%choice%</button>',
+  data: {task: 'captcha'},
+  on_finish: function(data){
+    sendDataToParent(data, 'captcha_data');
+    if(data.response != 1) { // index 1 is '7'
+      document.getElementById('jspsych-target').innerHTML = 
+        '<h2>Captcha Failed</h2><p>You did not answer the captcha correctly. Please refresh the page to try again.</p>';
+      return;
+    }
+  }
+});
+
+// ============== 2. SCREENING (Race/Ethnicity) ==============
+timeline.push({
+  type: jsPsychSurveyMultiChoice,
+  questions: [
+    {
+      prompt: "Which of the following best describes your racial or ethnic background? (Please select one option that best represents how you identify)",
+      name: "race",
+      options: [
+        "White/Caucasian (not Hispanic or Latino)",
+        "Black/African American",
+        "Hispanic or Latino",
+        "Asian or Asian American",
+        "Native American or Alaska Native",
+        "Native Hawaiian or Other Pacific Islander",
+        "Middle Eastern or North African"
+      ],
+      required: true
+    }
+  ],
+  data: {task: 'screening'},
+  on_finish: function(data) {
+    sendDataToParent(data, 'screening_response');
+  }
+});
+
+// ============== 3. INSTRUCTIONS ==============
+timeline.push({
+  type: jsPsychInstructions,
+  pages: [
+    "<h2>Welcome to Our Research Study</h2><p>Thank you for your interest in participating in our research on how people perceive social behaviors in different situations. In this study, you'll be shown various scenarios describing individuals engaging in different behaviors, and we'll ask you to rate how appropriate or inappropriate you find these behaviors.<br><br>There are no right or wrong answers—we're genuinely interested in your honest opinions and judgments. You'll need to make these judgments quickly, as each scenario will only be displayed for a short time. We're interested in your immediate reactions to these situations.<br><br>We'll also ask you some questions about your social attitudes and perceptions of different groups to better understand how these might relate to judgments of social behaviors.<br><br>Your responses are completely anonymous and will be used only for research purposes. The study should take about 20-25 minutes to complete. You can take breaks if needed, but we encourage you to complete the survey in one sitting if possible.</p>",
+    "<p>Let's begin! Please click 'Next' to start the study.</p>",
+    "<h2>Scenario Task Instructions</h2><p>In this part of the study, you'll be shown a series of brief scenarios describing a person engaged in various behaviors in different situations. For each scenario, you'll see:<ul><li>A name and face of a person</li><li>What behavior they're engaging in</li></ul>Your task is to quickly rate whether you find this behavior inappropriate or appropriate in the given context. You'll make your judgment using your keyboard. (<b>Key A = inappropriate, Key L = appropriate</b>).<br><br>Important: Each scenario will only be displayed briefly, so please respond with your immediate reaction. There are no right or wrong answers - we're interested in your spontaneous judgments.</p>"
+  ],
+  show_clickable_nav: true
+});
+
+// ============== 4. SCENARIO TASK ==============
+const scenario_names = [
+  {name: "Jamal", race: "Black", img: "https://picsum.photos/seed/jamal/200"},
+  {name: "Emily", race: "White", img: "https://picsum.photos/seed/emily/200"},
+  {name: "Darnell", race: "Black", img: "https://picsum.photos/seed/darnell/200"},
+  {name: "Megan", race: "White", img: "https://picsum.photos/seed/megan/200"},
+  {name: "Tyrone", race: "Black", img: "https://picsum.photos/seed/tyrone/200"},
+  {name: "Sarah", race: "White", img: "https://picsum.photos/seed/sarah/200"},
+  {name: "Marcus", race: "Black", img: "https://picsum.photos/seed/marcus/200"},
+  {name: "Jessica", race: "White", img: "https://picsum.photos/seed/jessica/200"}
+];
+
+const scenario_behaviors = [
+  "speaking loudly in a library",
+  "arriving late to a meeting", 
+  "cutting in line at a coffee shop",
+  "using a phone during a movie",
+  "not holding the door for someone",
+  "talking loudly on the phone in public",
+  "not returning a shopping cart",
+  "playing music without headphones",
+  "taking up two parking spaces",
+  "not saying thank you when helped"
+];
+
+// Generate all scenario combinations
+let scenario_stimuli = [];
+scenario_names.forEach(person => {
+  scenario_behaviors.forEach(behavior => {
+    scenario_stimuli.push({
+      name: person.name,
+      race: person.race,
+      img: person.img,
+      behavior: behavior
+    });
+  });
+});
+
+// Randomly select 15 scenarios
+scenario_stimuli = jsPsych.randomization.sampleWithoutReplacement(scenario_stimuli, 15);
+
+// Preload images
+timeline.push({
+  type: jsPsychPreload,
+  images: scenario_stimuli.map(x => x.img)
+});
+
+// Scenario trials
+scenario_stimuli.forEach((stim, index) => {
+  timeline.push({
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: `
+      <div style="text-align:center;">
+        <img src="${stim.img}" width="200" style="border-radius:8px;"><br>
+        <h3>${stim.name}</h3>
+        <p>${stim.behavior}</p>
+        <p><b>A = Inappropriate, L = Appropriate</b></p>
+      </div>
+    `,
+    choices: ['a', 'l'],
+    trial_duration: 5000,
+    data: {
+      task: 'scenario',
+      name: stim.name,
+      race: stim.race,
+      behavior: stim.behavior,
+      trial_index: index
+    },
+    on_finish: function(data) {
+      // Save individual scenario responses
+      sendDataToParent(data, `scenario_${index}_data`);
+    }
+  });
+});
+
+// ============== 5. THANK YOU / TRANSITION ==============
+timeline.push({
+  type: jsPsychHtmlButtonResponse,
+  stimulus: "<h2>Thank You for Completing the First Task</h2><p>In the next part of the study, we'll ask you to respond to several questionnaires about your social attitudes and perceptions. Unlike the previous task, there are no time constraints for these questions, so you can take your time to consider your responses carefully.<br><br>Please answer honestly—there are no right or wrong answers. We're interested in understanding your genuine perspectives and how they might relate to the judgments you made in the previous task.</p>",
+  choices: ['Next']
+});
+
+// ============== 6. TIGHT-LOOSE MINDSET SCALE ==============
+const tight_loose_questions = [
+  "I am very careful to avoid making mistakes.",
+  "I enjoy the uncertainty of going into a new situation without knowing what might happen.",
+  "I reflect on things before acting.",
+  "I keep my emotions under control.",
+  "Once I know what a situation calls for, it's easy for me to regulate my actions accordingly.",
+  "I stick to the rules.",
+  "I have found that I can adjust my behavior to meet the requirements of the situations I find myself in.",
+  "I talk even when I know I shouldn't.",
+  "I hate to change my plans at the last minute.",
+  "In social situations, I have the ability to alter my behavior if I feel that something else is called for.",
+  "I behave properly.",
+  "I don't like situations that are uncertain.",
+  "I disregard rules.",
+  "I rush into things.",
+  "I don't like to be with people who are capable of unexpected actions.",
+  "I let others finish what they are saying.",
+  "I make rash decisions.",
+  "I follow directions.",
+  "I have the ability to control the way I come across to people, depending on the impression I wish to give them.",
+  "I barge in on conversations."
+];
+
+timeline.push({
+  type: jsPsychSurveyLikert,
+  questions: tight_loose_questions.map(q => ({
+    prompt: q,
+    labels: ["Strongly Disagree", "Disagree", "Somewhat Disagree", "Neutral", "Somewhat Agree", "Agree", "Strongly Agree"],
+    required: true
+  })),
+  preamble: "<h3>Tight-Loose Mindset</h3><p>Please rate how accurately each statement describes you. Describe yourself as you generally are now, not as you wish to be in the future. There are no right or wrong answers - we're simply interested in your natural tendencies.</p>",
+  data: {task: 'tight_loose'},
+  on_finish: function(data) {
+    sendDataToParent(data, 'tight_loose_responses');
+  }
+});
+
+// ============== 7. CONDITIONAL QUESTIONNAIRES ==============
+// Helper function for branching
+function getRace() {
+  const race_data = jsPsych.data.get().filter({task: 'screening'}).values()[0];
+  if (!race_data) return null;
+  return race_data.response.race;
+}
+
+// Questionnaires for White participants
+const symbolic_realistic_threat_white = [
+  "White Americans and Black Americans have very different values.",
+  "Black Americans want their rights to be put ahead of the rights of White Americans.",
+  "Black Americans don't understand the way White Americans view the world.",
+  "Black Americans do not value the rights granted by the Constitution (life, liberty, and the pursuit of happiness) as much as White Americans do.",
+  "Black Americans don't value the traditions of their group as much as White Americans do.",
+  "Black Americans regard themselves as morally superior to White Americans.",
+  "The values of Black Americans regarding work are different from those of White Americans.",
+  "Most Black Americans will never understand what White Americans are like.",
+  "White Americans do not get as much respect from Black Americans as they deserve.",
+  "Black Americans hold too many positions of power and responsibility in this country.",
+  "Black Americans dominate American politics more than they should.",
+  "Too much money is spent on educational programs that benefit Black Americans.",
+  "Black Americans have more economic power than they deserve in this country.",
+  "Black Americans receive too much of the money spent on healthcare and childcare.",
+  "Too much money per student is spent on education for Black Americans.",
+  "The tax system favors Black Americans.",
+  "Black Americans have more political power than they deserve in this country.",
+  "Public service agencies favor Black Americans over White Americans."
+];
+
+const warmth_competence_black = [
+  "Warm", "Friendly", "Trustworthy", "Good-natured", "Sincere",
+  "Competent", "Capable", "Intelligent", "Skilled", "Efficient"
+];
+
+const contact_white = [
+  {prompt: "How often do you interact with Black Americans?", labels: ["Never", "Less than once a year", "Yearly", "A few times a year", "Monthly", "Weekly", "Daily"]},
+  {prompt: "How many Black Americans do you know, at least as acquaintances?", labels: ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10+"]},
+  {prompt: "When you interact with Black Americans, to what extent do you experience the following: The contact is friendly?", labels: ["Strongly Disagree", "Disagree", "Somewhat Disagree", "Neutral", "Somewhat Agree", "Agree", "Strongly Agree"]},
+  {prompt: "You cooperate well with each other?", labels: ["Strongly Disagree", "Disagree", "Somewhat Disagree", "Neutral", "Somewhat Agree", "Agree", "Strongly Agree"]},
+  {prompt: "You interact as equals?", labels: ["Strongly Disagree", "Disagree", "Somewhat Disagree", "Neutral", "Somewhat Agree", "Agree", "Strongly Agree"]}
+];
+
+// Questionnaires for Black participants
+const symbolic_realistic_threat_black = [
+  "Black Americans and White Americans have very different values.",
+  "White Americans want their rights to be put ahead of the rights of Black Americans.",
+  "White Americans don't understand the way Black Americans view the world.",
+  "White Americans do not value the rights granted by the Constitution (life, liberty, and the pursuit of happiness) as much as Black Americans do.",
+  "White Americans don't value the traditions of their group as much as Black Americans do.",
+  "White Americans regard themselves as morally superior to Black Americans.",
+  "The values of White Americans regarding work are different from those of Black Americans.",
+  "Most White Americans will never understand what Black Americans are like.",
+  "Black Americans do not get as much respect from White Americans as they deserve.",
+  "White Americans hold too many positions of power and responsibility in this country.",
+  "White Americans dominate American politics more than they should.",
+  "Too much money is spent on educational programs that benefit White Americans.",
+  "White Americans have more economic power than they deserve in this country.",
+  "White Americans receive too much of the money spent on healthcare and childcare.",
+  "Too much money per student is spent on education for White Americans.",
+  "The tax system favors White Americans.",
+  "White Americans have more political power than they deserve in this country.",
+  "Public service agencies favor White Americans over Black Americans."
+];
+
+const warmth_competence_white = [
+  "Warm", "Friendly", "Trustworthy", "Good-natured", "Sincere",
+  "Competent", "Capable", "Intelligent", "Skilled", "Efficient"
+];
+
+const respectability_politics = [
+  "If Black people carried themselves better, white people would treat them better.",
+  "Black people would face fewer problems if some members of the group behaved better.",
+  "Black people would fare better in society if they behaved more like everybody else.",
+  "It is important to me that other Black people behave in ways that contribute to a positive image of the group.",
+  "It matters to me that other Black people behave appropriately in public.",
+  "It is important to me that other Black people carry themselves in ways that others will respect."
+];
+
+const contact_black = [
+  {prompt: "How often do you interact with White Americans?", labels: ["Never", "Less than once a year", "Yearly", "A few times a year", "Monthly", "Weekly", "Daily"]},
+  {prompt: "How many White Americans do you know, at least as acquaintances?", labels: ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10+"]},
+  {prompt: "When you interact with White Americans, to what extent do you experience the following: The contact is friendly?", labels: ["Strongly Disagree", "Disagree", "Somewhat Disagree", "Neutral", "Somewhat Agree", "Agree", "Strongly Agree"]},
+  {prompt: "You cooperate well with each other?", labels: ["Strongly Disagree", "Disagree", "Somewhat Disagree", "Neutral", "Somewhat Agree", "Agree", "Strongly Agree"]},
+  {prompt: "You interact as equals?", labels: ["Strongly Disagree", "Disagree", "Somewhat Disagree", "Neutral", "Somewhat Agree", "Agree", "Strongly Agree"]}
+];
+
+// Branching logic for White participants
+timeline.push({
+  timeline: [
+    {
+      type: jsPsychSurveyLikert,
+      preamble: "<h3>Social Attitudes</h3><p>Below is a series of statements. Please indicate how much you agree or disagree with each statement by selecting the appropriate option on the scale. Please be honest, there are no right or wrong answers (1 = strongly disagree / 7 = strongly agree).</p>",
+      questions: symbolic_realistic_threat_white.map(q => ({
+        prompt: q,
+        labels: ["1", "2", "3", "4", "5", "6", "7"],
+        required: true
+      })),
+      data: {task: 'symbolic_realistic_threat_white'},
+      on_finish: function(data) {
+        sendDataToParent(data, 'threat_scale_white');
+      }
+    },
+    {
+      type: jsPsychSurveyText,
+      preamble: "<h3>Group Perceptions</h3><p>Please rate your perception of Black Americans on the following traits using the scale provided: What percentage of Black Americans are ___? (0 – 100%)</p>",
+      questions: warmth_competence_black.map(q => ({
+        prompt: q,
+        required: true
+      })),
+      data: {task: 'warmth_competence_black'},
+      on_finish: function(data) {
+        sendDataToParent(data, 'warmth_competence_black_responses');
+      }
+    },
+    {
+      type: jsPsychSurveyLikert,
+      preamble: "<h3>Intergroup Contact</h3>",
+      questions: contact_white,
+      data: {task: 'contact_white'},  
+      on_finish: function(data) {
+        sendDataToParent(data, 'contact_white_responses');
+      }
+    }
+  ],
+  conditional_function: function(){
+    return getRace() === "White/Caucasian (not Hispanic or Latino)";
+  }
+});
+
+// Branching logic for Black participants
+timeline.push({
+  timeline: [
+    {
+      type: jsPsychSurveyLikert,
+      preamble: "<h3>Social Attitudes</h3><p>Below is a series of statements. Please indicate how much you agree or disagree with each statement by selecting the appropriate option on the scale. Please be honest, there are no right or wrong answers (1 = strongly disagree / 7 = strongly agree).</p>",
+      questions: symbolic_realistic_threat_black.map(q => ({
+        prompt: q,
+        labels: ["1", "2", "3", "4", "5", "6", "7"],
+        required: true
+      })),
+      data: {task: 'symbolic_realistic_threat_black'},
+      on_finish: function(data) {
+        sendDataToParent(data, 'threat_scale_black');
+      }
+    },
+    {
+      type: jsPsychSurveyText,
+      preamble: "<h3>Group Perceptions</h3><p>Please rate your perception of White Americans on the following traits using the scale provided: What percentage of White Americans are ___? (0 – 100%)</p>",
+      questions: warmth_competence_white.map(q => ({
+        prompt: q,
+        required: true
+      })),
+      data: {task: 'warmth_competence_white'},
+      on_finish: function(data) {
+        sendDataToParent(data, 'warmth_competence_white_responses');
+      }
+    },
+    {
+      type: jsPsychSurveyLikert,
+      preamble: "<h3>Social Perspectives</h3><p>Below are a series of statements. Please indicate your level of agreement or disagreement with each statement. (1 = strongly disagree, 6 = strongly agree)</p>",
+      questions: respectability_politics.map(q => ({
+        prompt: q,
+        labels: ["1", "2", "3", "4", "5", "6"],
+        required: true
+      })),
+      data: {task: 'respectability_politics'},
+      on_finish: function(data) {
+        sendDataToParent(data, 'respectability_politics_responses');
+      }
+    },
+    {
+      type: jsPsychSurveyLikert,
+      preamble: "<h3>Intergroup Contact</h3>",
+      questions: contact_black,
+      data: {task: 'contact_black'},
+      on_finish: function(data) {
+        sendDataToParent(data, 'contact_black_responses');
+      }
+    }
+  ],
+  conditional_function: function(){
+    return getRace() === "Black/African American";
+  }
+});
+
+// ============== 8. DEMOGRAPHICS ==============
+timeline.push({
+  type: jsPsychSurveyText,
+  preamble: "<h3>Demographics</h3>",
+  questions: [
+    {prompt: "What is your age?", required: true, name: "age"},
+    {prompt: "What is your gender? (Man/Woman/Nonbinary/Other)", required: true, name: "gender"},
+    {prompt: "If you selected 'Other', please specify your gender:", required: false, name: "gender_other"}
+  ],
+  data: {task: 'demographics'},
+  on_finish: function(data) {
+    sendDataToParent(data, 'demographics_responses');
+  }
+});
+
+timeline.push({
+  type: jsPsychSurveyMultiChoice,
+  preamble: "<h3>Education</h3>",
+  questions: [
+    {
+      prompt: "What is the highest degree or level of education you have completed?",
+      name: "education",
+      options: [
+        "Less than high school",
+        "High school graduate or equivalent", 
+        "Some college, no degree",
+        "Associate's degree",
+        "Bachelor's degree",
+        "Master's degree",
+        "Professional degree",
+        "Doctorate degree"
+      ],
+      required: true
+    }
+  ],
+  data: {task: 'education'},
+  on_finish: function(data) {
+    sendDataToParent(data, 'education_response');
+  }
+});
+
+timeline.push({
+  type: jsPsychSurveyLikert,
+  preamble: "<h3>Political Orientation</h3>",
+  questions: [
+    {
+      prompt: "Please indicate your political orientation on the sliding scale below:",
+      labels: ["1 = Very liberal", "2", "3", "4", "5", "6", "7 = Very conservative"],
+      required: true
+    }
+  ],
+  data: {task: 'political_orientation'},
+  on_finish: function(data) {
+    sendDataToParent(data, 'political_orientation_response');
+  }
+});
+
+timeline.push({
+  type: jsPsychSurveyLikert,
+  preamble: "<h3>Subjective Socioeconomic Status</h3><p>Think of this ladder as representing where people stand in the United States. At the top of the ladder are the people who are the best off - those who have the most money, the most education, and the most respected jobs. At the bottom are the people who are the worst off - who have the least money, least education, and the least respected jobs or no job. Where would you place yourself on this ladder? Please select the number that best represents where you think you stand relative to other people in the United States.</p>",
+  questions: [
+    {
+      prompt: "Where would you place yourself on this ladder?",
+      labels: ["1 - Lowest standing", "2", "3", "4", "5", "6", "7", "8", "9", "10 - Highest standing"],
+      required: true
+    }
+  ],
+  data: {task: 'subjective_ses'},
+  on_finish: function(data) {
+    sendDataToParent(data, 'ses_response');
+  }
+});
+
+// ============== 9. CENSUS PASSAGES & COMPREHENSION ==============
+const census_majority_minority = `
+  <h3>Changing demographic condition</h3>
+  <p>New U.S. Census Bureau data suggest that America will become a "majority-minority" nation much faster than once predicted. The nation's racial minority population is steadily rising, advancing an unmistakable trend that could make minorities the new American majority by midcentury. The data show a declining number of White adults and growing under-18 populations of Hispanics, Asians, and other minorities. Demographers calculate that by 2042, Americans who identify themselves as Hispanic, Black, Asian, American Indian, Native Hawaiian, or Pacific Islander will together outnumber non-Hispanic Whites. The main reasons for the accelerating change are rapid immigration growth and significantly higher birthrates among racial and ethnic minorities. As White baby boomers age past their childbearing years, younger Hispanic parents are having children – and driving U.S. population growth. For example, there are now roughly 9 births for every 1 death among Hispanics, compared to a roughly one-to-one ratio for Whites. The latest figures are predicated on current and historical trends, which can be thrown awry by several variables, including prospective overhauls of public policy.</p>
+`;
+
+timeline.push({
+  type: jsPsychInstructions,
+  pages: [census_majority_minority],
+  show_clickable_nav: true
+});
+
+timeline.push({
+  type: jsPsychSurveyMultiChoice,
+  preamble: "<b>Comprehension Questions</b>",
+  questions: [
+    {
+      prompt: "Which racial group is expected to be the largest contributor to population growth in the United States?",
+      name: "q1",
+      options: [
+        "Hispanics",
+        "Asians", 
+        "African Americans",
+        "Native Americans"
+      ],
+      required: true
+    },
+    {
+      prompt: 'According to the passage, by what year is America projected to become a "majority-minority" nation?',
+      name: "q2",
+      options: [
+        "2030",
+        "2042",
+        "2050", 
+        "2025"
+      ],
+      required: true
+    },
+    {
+      prompt: "What are the two main factors driving demographic changes mentioned in the passage?",
+      name: "q3",
+      options: [
+        "Rapid immigration growth and significantly higher birthrates among racial and ethnic minorities",
+        "Declining White population and increased life expectancy of minorities",
+        "Urban migration and international adoption",
+        "Lower mortality rates and improved healthcare access"
+      ],
+      required: true
+    }
+  ],
+  data: {task: 'census_majority_minority_comprehension'},
+  on_finish: function(data) {
+    sendDataToParent(data, 'census_majority_minority_responses');
+  }
+});
+
+const census_control = `
+  <h3>Control condition</h3>
+  <p>New U.S. Census Bureau data suggest that the rate of geographical mobility, or the number of individuals who have moved within the past year, is increasing. The national mover rate increased from 8.4 percent in 2021 to 8.7 percent in 2022. According to the new data, 28.2 million people changed residences in the U.S. within the past year. 77.8 percent of all movers stayed within the same state. Renters were much more likely to move than homeowners. The estimates also reveal that many of the nation's fastest-growing cities are suburbs. Specifically, principal cities within metropolitan areas experienced a net loss of 1.2 million movers, while the suburbs had a net gain of .8 million movers. For those who moved to a different county or state, the reasons for moving varied considerably by the length of their move. The latest figures are predicated on current and historical trends, which can be thrown awry by several variables, including prospective overhauls of public policy.</p>
+`;
+
+timeline.push({
+  type: jsPsychInstructions,
+  pages: [census_control],
+  show_clickable_nav: true
+});
+
+timeline.push({
+  type: jsPsychSurveyMultiChoice,
+  preamble: "<b>Comprehension Questions</b>",
+  questions: [
+    {
+      prompt: "How many people changed residences in the U.S. within the past year?",
+      name: "q1",
+      options: [
+        "18.7 million people",
+        "28.2 million people",
+        "38.5 million people",
+        "44.1 million people"
+      ],
+      required: true
+    },
+    {
+      prompt: "According to the passage, which areas experienced a net gain of movers?",
+      name: "q2",
+      options: [
+        "Principal cities",
+        "Rural areas",
+        "Suburbs",
+        "Metropolitan centers"
+      ],
+      required: true
+    },
+    {
+      prompt: "Which group was more likely to move - renters or homeowners?",
+      name: "q3",
+      options: [
+        "Renters",
+        "Homeowners",
+        "Both groups moved at equal rates",
+        "The passage doesn't specify"
+      ],
+      required: true
+    }
+  ],
+  data: {task: 'census_control_comprehension'},
+  on_finish: function(data) {
+    sendDataToParent(data, 'census_control_responses');
+  }
+});
+
+// ============== Run Experiment ==============
+jsPsych.run(timeline);
+
+</script>
+</html>
